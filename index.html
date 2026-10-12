@@ -167,7 +167,6 @@ td.act{white-space:nowrap;text-align:right}
 const KEYB='kryper-finance-v2';let KEY=KEYB;
 /* Login e nuvem (Supabase): cole aqui a URL do projeto e a chave pública (publishable key: sb_publishable_...) */
 const SB_URL='https://mdfjvwjqtbmtxictksnw.supabase.co',SB_KEY='sb_publishable_cUBoqnNu3N0SP6myX4Pr3w_1KuPtJkK';
-const SB_GOOGLE=false; /* mude para true só depois de ativar o provedor Google no Supabase */
 const MN=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const CO=['Alimentação','Transporte','Casa','Saúde','Educação','Tecnologia','Lazer','Assinaturas','Compras','Outros'];
 const CI=['Trabalho','Freelance','Extras','Empresa','Vendas','Serviços','Investimentos','Outros'];
@@ -446,7 +445,7 @@ window.addEventListener('hashchange',route);
 /* ===== LOGIN (Supabase Auth) ===== */
 const RECOVERY=/type=recovery/.test(location.hash);
 const SB_OK=!!(SB_URL&&SB_KEY),SB=(SB_OK&&window.supabase)?supabase.createClient(SB_URL,SB_KEY):null;
-let LM='in',LMSG=null,LOCAL=false;
+let LM='in',LMSG=null,LOCAL=false,GOOGLE_ON=false;
 const lsGet=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
 const LT={in:['Entrar','Acesse suas finanças de qualquer lugar.','Entrar'],up:['Criar conta','Crie sua conta para começar.','Criar conta'],reset:['Recuperar senha','Enviaremos um link para o seu e-mail.','Enviar link'],recover:['Nova senha','Escolha uma nova senha.','Salvar nova senha']};
 const loginErr=e=>{const m=(e&&e.message)||'';return /invalid login/i.test(m)?'E-mail ou senha incorretos.':/not confirmed/i.test(m)?'Confirme seu e-mail antes de entrar.':/already (been )?registered/i.test(m)?'Este e-mail já tem cadastro. Faça login.':/rate limit|too many/i.test(m)?'Muitas tentativas. Aguarde um pouco e tente de novo.':/provider is not enabled|unsupported provider/i.test(m)?'O login com o Google ainda não foi ativado no Supabase.':/password/i.test(m)?'Senha inválida. Use pelo menos 6 caracteres.':/fetch|network/i.test(m)?'Sem conexão. Tente de novo.':'Não foi possível concluir. Tente novamente.'};
@@ -455,7 +454,7 @@ function drawLogin(){const m=LM,t=LT[m],pw=m!='reset',two=m=='up'||m=='recover',
   const note=SB?'':SB_OK?'<div class="msg err">Não foi possível carregar o login. Verifique sua conexão e recarregue a página.</div>':'<div class="msg info">O login ainda não foi configurado. Cole a URL e a chave do Supabase em SB_URL e SB_KEY, no início do código, para ativar.</div>';
   $('#lgbox').innerHTML=`<div class="logo" style="padding:0"><i>K</i><b>Kryper Finance</b></div><h2>${t[0]}</h2><p class="mu" style="margin-bottom:16px">${t[1]}</p>${note}${LMSG?`<div class="msg ${LMSG[0]}">${esc(LMSG[1])}</div>`:''}
   <form id="lf">${m=='up'?'<label>Nome<input name="name" autocomplete="name" required></label>':''}${em?'<label>E-mail<input name="email" type="email" autocomplete="email" required></label>':''}${pw?`<label>Senha<input name="pw" type="password" minlength="6" autocomplete="${m=='in'?'current-password':'new-password'}" required></label>`:''}${two?'<label>Confirmar senha<input name="pw2" type="password" minlength="6" autocomplete="new-password" required></label>':''}<button class="btn pri" id="lsub" ${SB?'':'disabled'}>${t[2]}</button></form>
-  ${SB&&SB_GOOGLE&&(m=='in'||m=='up')?'<div class="mu" style="text-align:center;margin:14px 0 10px;font-size:12px">ou</div><button type="button" class="btn" data-a="google" style="width:100%">Entrar com o Google</button>':''}
+  ${SB&&GOOGLE_ON&&(m=='in'||m=='up')?'<div class="mu" style="text-align:center;margin:14px 0 10px;font-size:12px">ou</div><button type="button" class="btn" data-a="google" style="width:100%">Entrar com o Google</button>':''}
   <div style="display:flex;justify-content:space-between;margin-top:14px;flex-wrap:wrap;gap:8px">${m=='in'?'<button class="lk" data-lm="reset">Esqueci minha senha</button><button class="lk" data-lm="up">Criar conta</button>':m=='recover'?'':'<button class="lk" data-lm="in">← Voltar para o login</button>'}</div>
   ${SB_OK?'':'<button class="btn" data-a="local" style="width:100%;margin-top:16px">Continuar em modo local (sem login)</button>'}`;
   $('#lf').onsubmit=submitLogin}
@@ -482,6 +481,9 @@ async function boot(){
   const {data}=await SB.auth.getSession();USER=(data.session&&data.session.user)||null;
   SB.auth.onAuthStateChange((ev,ses)=>{const u=(ses&&ses.user)||null;if((u?u.id:null)===(USER?USER.id:null))return;
     USER=u;if(!u){SYNCED=false;LASTSTR='';S=blank();setSync('')}setTimeout(start,0)});
+  /* mostra o botão do Google só se o provedor estiver ativado no Supabase */
+  fetch(SB_URL+'/auth/v1/settings',{headers:{apikey:SB_KEY}}).then(x=>x.json()).then(j=>{GOOGLE_ON=!!(j&&j.external&&j.external.google);
+    if(GOOGLE_ON&&!USER&&$('#login').classList.contains('open')&&![...document.querySelectorAll('#lf input')].some(i=>i.value))drawLogin()}).catch(()=>{});
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState=='visible')syncNow()});
   window.addEventListener('online',()=>{if(USER&&!SYNCED)enter()});
   if(RECOVERY&&USER){LM='recover';LMSG=['info','Defina sua nova senha.'];showLogin();return}
