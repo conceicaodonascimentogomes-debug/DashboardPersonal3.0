@@ -169,7 +169,7 @@ const KEYB='kryper-finance-v2';let KEY=KEYB;
 /* Login e nuvem (Supabase): cole aqui a URL do projeto e a chave pública (publishable key: sb_publishable_...) */
 const SB_URL='https://mdfjvwjqtbmtxictksnw.supabase.co',SB_KEY='sb_publishable_cUBoqnNu3N0SP6myX4Pr3w_1KuPtJkK';
 const MN=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-const CO=['Alimentação','Transporte','Casa','Saúde','Educação','Tecnologia','Lazer','Assinaturas','Compras','Outros'];
+const CO=['Alimentação','Transporte','Casa','Saúde','Educação','Tecnologia','Lazer','Assinaturas','Compras','Dívidas','Outros'];
 const CI=['Trabalho','Freelance','Extras','Empresa','Vendas','Serviços','Investimentos','Outros'];
 const PAY=['Pix','Cartão de crédito','Cartão de débito','Boleto','Dinheiro','Transferência'];
 const PER={Mensal:1,Trimestral:3,Semestral:6,Anual:12};
@@ -236,7 +236,7 @@ async function syncNow(){if(!USER||!SYNCED)return;const u=USER;
 /* ===== CÁLCULOS ===== */
 function stats(){const n=new Date(),m=mk(n),pm=mk(new Date(n.getFullYear(),n.getMonth()-1,1)),I=S.tx.filter(t=>t.type=='in'),O=S.tx.filter(t=>t.type=='out'),inM=(a,k)=>a.filter(t=>t.date.startsWith(k));
   return{m,rev:sum(inM(I,m)),prev:sum(inM(I,pm)),exp:sum(inM(O,m)),bal:sum(I.filter(t=>t.status=='Recebido'))-sum(O.filter(t=>t.status=='Pago')),goal:S.mg[m]??S.mg.def}}
-const debtSt=d=>d.total-d.paid<=0?'Quitada':pd(d.due)<today()?'Atrasada':(pd(d.due)-today())/864e5<=7?'Próxima do vencimento':'Em dia';
+const debtSt=d=>d.total>0&&d.total-d.paid<=0?'Quitada':pd(d.due)<today()?'Atrasada':(pd(d.due)-today())/864e5<=7?'Próxima do vencimento':'Em dia';
 function nextCharge(s){const d=pd(s.date),t=today(),st=PER[s.period]||1;let n=0;while(d<t&&n++<500)d.setMonth(d.getMonth()+st);return d}
 const monthly=s=>s.status=='Ativa'?s.val/(PER[s.period]||1):0;
 const soon=()=>S.subs.filter(s=>s.status=='Ativa'&&(nextCharge(s)-today())/864e5<=7);
@@ -308,7 +308,7 @@ function drawRows(){const c=LV[V];if(!c)return;const v=id=>$(id)?$(id).value:'',
   $('#rows').innerHTML=r.length?r.map(x=>`<tr>${c.cols.map(f=>`<td data-l="${f[0]}">${f[1](x)}</td>`).join('')}<td class="act"><button class="ib" data-a="edit" data-id="${x.id}" title="Editar" aria-label="Editar">✎</button><button class="ib" data-a="del" data-id="${x.id}" title="Excluir" aria-label="Excluir">🗑</button></td></tr>`).join(''):`<tr><td colspan="12" class="empty">Nada por aqui ainda. Use “Adicionar” para criar o primeiro registro.</td></tr>`;updBell()}
 function openItem(id,t){const c=LV[V],cl=coll(c.k),item=id?S[cl].find(x=>x.id==id):null,sk=cl=='tx'?(item?item.type:(c.k=='all'?t:c.k)):c.k,sc=SC[sk];
   form((item?'Editar ':'Novo(a) ')+sc.t.toLowerCase(),sc.f,item||sc.d(),o=>{if(item)Object.assign(item,o);else S[cl].push({id:uid(),...sc.d(),...o,...(cl=='tx'?{type:sk}:{})});save();closeM();toast(`✓ ${sc.t} salvo(a) com sucesso`);refresh()})}
-function delItem(id){const cl=coll(LV[V].k);ask('Excluir este registro? Essa ação não pode ser desfeita.',()=>{S[cl]=S[cl].filter(x=>x.id!=id);save();toast('✓ Registro excluído');refresh()})}
+function delItem(id){const cl=coll(LV[V].k);ask('Excluir este registro? Essa ação não pode ser desfeita.',()=>{if(cl=='tx'){const t=S.tx.find(x=>x.id==id),d=t&&t.debt&&S.debts.find(x=>x.id==t.debt);if(d){d.paid=Math.max(0,+(d.paid-t.val).toFixed(2));d.pp=Math.max(0,d.pp-1)}}S[cl]=S[cl].filter(x=>x.id!=id);save();toast('✓ Registro excluído');refresh()})}
 
 /* ===== GRÁFICOS ===== */
 const CH={};let RG='6';
@@ -342,7 +342,7 @@ function reports(){const m=stats().m;return{h:`<div class="top"><h1>Relatórios<
   <div class="grid g2e"><div class="card"><h3>Gastos por categoria</h3><div class="ch"><canvas id="r1"></canvas></div></div><div class="card"><h3>Faturamento × gastos mensais</h3><div class="ch"><canvas id="r2"></canvas></div></div>
   <div class="card"><h3>Evolução do saldo</h3><div class="ch"><canvas id="r3"></canvas></div></div><div class="card"><h3>Cartões e dívidas</h3>${S.cards.map(c=>`<div style="margin-bottom:10px">${esc(c.name)} <span class="mu">${pct(c.used,c.limit).toFixed(0)}%</span>${bar(pct(c.used,c.limit),usec(pct(c.used,c.limit)))}</div>`).join('')||'<p class="mu">Sem cartões.</p>'}${S.debts.map(d=>`<div style="margin-bottom:10px">${esc(d.name)} <span class="mu">${pct(d.paid,d.total).toFixed(0)}% pago</span>${bar(pct(d.paid,d.total),'var(--b)')}</div>`).join('')}</div></div>`,
   after(){let o=S.tx.filter(t=>t.type=='out'&&t.date.startsWith(m));if(!o.length)o=S.tx.filter(t=>t.type=='out');const cat={};o.forEach(t=>cat[t.cat]=(cat[t.cat]||0)+t.val);
-    chart('r1',{type:'doughnut',data:{labels:Object.keys(cat),datasets:[{data:Object.values(cat),backgroundColor:['#1fd17a','#b9c0c9','#f87171','#f5c542','#2dd4bf','#7a8691','#86efac','#fb923c','#5eead4','#4b5563'],borderWidth:0}]},options:{plugins:{legend:{position:'right'}}}});
+    chart('r1',{type:'doughnut',data:{labels:Object.keys(cat),datasets:[{data:Object.values(cat),backgroundColor:['#1fd17a','#b9c0c9','#f87171','#f5c542','#2dd4bf','#7a8691','#86efac','#fb923c','#5eead4','#4b5563','#a3e635'],borderWidth:0}]},options:{plugins:{legend:{position:'right'}}}});
     const s=series('12');chart('r2',{type:'bar',data:{labels:s.lab,datasets:[{label:'Faturamento',data:s.a,backgroundColor:'#1fd17aaa',borderRadius:5},{label:'Gastos',data:s.b,backgroundColor:'#f87171aa',borderRadius:5}]}});
     let acc=0;chart('r3',{type:'line',data:{labels:s.lab,datasets:[{label:'Saldo acumulado',data:s.c.map(v=>acc+=v),borderColor:'#b9c0c9',backgroundColor:'#b9c0c922',fill:true,tension:.35}]}})}}}
 
@@ -370,6 +370,31 @@ async function pdfLines(file){await loadPdfJs();const doc=await pdfjsLib.getDocu
     tc.items.forEach(i=>{if(!i.str.trim())return;const y=Math.round(i.transform[5]/3);let r=rows.find(q=>Math.abs(q.y-y)<=1);if(!r){r={y,it:[]};rows.push(r)}r.it.push([i.transform[4],i.str])});
     rows.sort((a,b)=>b.y-a.y).forEach(r=>out.push(r.it.sort((a,b)=>a[0]-b[0]).map(i=>i[1]).join(' ').replace(/\s+/g,' ').trim()))}
   return out}
+/* --- duplicatas e Shopee/MAREE --- */
+const nrm=s=>(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+const cents=v=>Math.round(v*100),fpOf=(d,t,v,n)=>d+'|'+t+'|'+cents(v)+'|'+nrm(n);
+const STOPW=/^(PIX|TRANSFERENCIA|ENVIADA|ENVIADO|RECEBIDA|RECEBIDO|PAGAMENTO|COMPRA|DEBITO|CREDITO|LTDA|PELO|PARA|DE|DA|DO)$/;
+const toks=s=>nrm(s).split(' ').filter(w=>w.length>=4&&!STOPW.test(w));
+const overlap=(a,b)=>{const na=nrm(a),nb=nrm(b);return !!na&&!!nb&&(na.includes(nb)||nb.includes(na)||toks(a).some(w=>nb.includes(w)))};
+const isMaree=n=>/\bMAREE\b/.test(nrm(n));
+const nextM=s=>{const d=pd(s);d.setMonth(d.getMonth()+1);return iso(d)};
+let SK=0;
+/* 2 = já importado (some da lista) · 1 = parecido (aparece desmarcado) · 0 = novo */
+function markDups(rows){
+  const pool=S.tx.map(t=>({t,k:t.fp||fpOf(t.date,t.type,t.val,t.orig||t.name),u:false}));
+  rows.forEach(r=>{r.fp=fpOf(r.date,r.type,r.val,r.name);r.dup=0;
+    const m=pool.find(q=>!q.u&&q.k==r.fp)||pool.find(q=>!q.u&&q.t.date==r.date&&cents(q.t.val)==cents(r.val)&&overlap(q.t.orig||q.t.name,r.name));
+    if(m){m.u=true;r.dup=2;return}
+    if(pool.some(q=>!q.u&&q.t.date==r.date&&cents(q.t.val)==cents(r.val)))r.dup=1});
+  return rows}
+function shopeeDebt(create){let d=S.debts.find(x=>x.auto=='shopee')||S.debts.find(x=>/shopee/i.test(x.name));
+  if(!d&&create){const tot=parseFloat($('#shTot')&&$('#shTot').value)||0,par=parseInt($('#shPar')&&$('#shPar').value)||0;
+    d={id:uid(),name:'Shopee (crédito parcelado)',total:tot,paid:0,due:dd(30),parcels:par,pp:0,auto:'shopee'};S.debts.push(d)}
+  if(d&&!d.auto)d.auto='shopee';return d}
+function payShopee(t,d){t.name='Parcela Shopee (MAREE)';t.party='MAREE INSTITUICAO DE PAGAMENTO LTDA';t.cat='Dívidas';t.pay='Pix';t.debt=d.id;
+  t.note='Parcela do crédito Shopee • '+(t.note||'importado do extrato PDF');
+  d.paid=+(d.paid+t.val).toFixed(2);d.pp=d.parcels>0?Math.min(d.parcels,d.pp+1):d.pp+1;
+  const nx=nextM(t.date);if(!d.dueSet||nx>d.due){d.due=nx;d.dueSet=1}}
 function parseExtrato(lines){const yr=+((lines.join(' ').match(/\b(20\d\d)\b/)||[])[1]||new Date().getFullYear());
   const owner=/^[A-Za-zÀ-ú ]{8,60}$/.test(lines[0]||'')?lines[0].toUpperCase():'';let cur=null,sec=null;const out=[];
   for(const l of lines){
@@ -386,19 +411,31 @@ function parseExtrato(lines){const yr=+((lines.join(' ').match(/\b(20\d\d)\b/)||
     if(name.length<3||!/[a-zA-ZÀ-ú]{3}/.test(name))continue;
     const neg=v[1]=='-'||v[2]=='-',L=(v[5]||'').toUpperCase();
     const type=sec||(neg||L=='D'?'out':L=='C'?'in':OUTK.test(name)?'out':INK.test(name)?'in':'in');
-    const cat=type=='out'?((CATM.find(c=>c[0].test(name))||[])[1]||'Outros'):'Outros';
-    out.push({date:cur,name:name.slice(0,80),val,type,cat,own:!!owner&&type=='in'&&name.toUpperCase().includes(owner),dup:S.tx.some(t=>t.date==cur&&t.type==type&&Math.abs(t.val-val)<.005)})}
-  return out}
+    const cat=type=='out'?(isMaree(name)?'Dívidas':(CATM.find(c=>c[0].test(name))||[])[1]||'Outros'):'Outros';
+    out.push({date:cur,name:name.slice(0,80),val,type,cat,own:!!owner&&type=='in'&&name.toUpperCase().includes(owner),mar:isMaree(name)})}
+  return markDups(out)}
 function previewExtrato(){const mb=$('#mb');mb.classList.add('wide');
-  mb.innerHTML=`<h3>Importar extrato</h3><p class="mu">${P.length} lançamentos encontrados. Confira o tipo (entrada ou saída) e desmarque o que não quiser importar.</p>
-  <div class="tw" style="max-height:50vh;overflow:auto"><table style="min-width:520px"><thead><tr><th></th><th>Data</th><th>Descrição</th><th>Tipo</th><th>Valor</th></tr></thead><tbody>${P.map((x,i)=>`<tr><td><input type="checkbox" data-i="${i}" ${x.dup?'':'checked'} aria-label="Importar este lançamento"></td><td>${fd(x.date)}</td><td>${esc(x.name)}${x.dup?' <span class="pill y">possível duplicata</span>':''}${x.own?' <span class="pill">entre contas suas</span>':''}</td><td><select data-ty="${i}"><option value="in" ${x.type=='in'?'selected':''}>Entrada</option><option value="out" ${x.type=='out'?'selected':''}>Saída</option></select></td><td>${brl(x.val)}</td></tr>`).join('')}</tbody></table></div>
+  const mar=P.filter(x=>x.mar&&x.type=='out'),need=mar.length&&!shopeeDebt(false);
+  mb.innerHTML=`<h3>Importar extrato</h3><p class="mu">${P.length} lançamento(s) novo(s).${SK?` <b>${SK} já existia(m) e foi(ram) ignorado(s) automaticamente.</b>`:''} Confira o tipo (entrada ou saída) e desmarque o que não quiser importar.</p>
+  ${mar.length?`<div class="msg info" style="margin-bottom:10px">🛍️ ${mar.length} pagamento(s) para <b>MAREE INSTITUIÇÃO DE PAGAMENTO</b> (${brl(mar.reduce((s,x)=>s+x.val,0))}) serão registrados como parcelas do crédito da <b>Shopee</b> em Dívidas.${need?`<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><label style="flex:1;min-width:140px">Valor total do parcelado (opcional)<input id="shTot" type="number" step="0.01" min="0" placeholder="R$"></label><label style="flex:1;min-width:140px">Nº de parcelas (opcional)<input id="shPar" type="number" min="0" placeholder="ex.: 12"></label></div>`:''}</div>`:''}
+  <div class="tw" style="max-height:50vh;overflow:auto"><table style="min-width:520px"><thead><tr><th></th><th>Data</th><th>Descrição</th><th>Tipo</th><th>Valor</th></tr></thead><tbody>${P.map((x,i)=>`<tr><td><input type="checkbox" data-i="${i}" ${x.dup?'':'checked'} aria-label="Importar este lançamento"></td><td>${fd(x.date)}</td><td>${esc(x.name)}${x.mar&&x.type=='out'?' <span class="pill g">Shopee · parcela</span>':''}${x.dup?' <span class="pill y">possível duplicata</span>':''}${x.own?' <span class="pill">entre contas suas</span>':''}</td><td><select data-ty="${i}"><option value="in" ${x.type=='in'?'selected':''}>Entrada</option><option value="out" ${x.type=='out'?'selected':''}>Saída</option></select></td><td>${brl(x.val)}</td></tr>`).join('')}</tbody></table></div>
   <div class="fa"><button class="btn" data-a="close">Cancelar</button><button class="btn pri" data-a="doimp">Importar selecionados</button></div>`;
   $('#modal').classList.add('open')}
 function doImport(){const sel=[...document.querySelectorAll('#mb [data-i]:checked')].map(c=>P[+c.dataset.i]);
-  sel.forEach(x=>S.tx.push({id:uid(),type:x.type,name:x.name,party:'',cat:x.type=='in'?'Outros':(CO.includes(x.cat)?x.cat:'Outros'),val:x.val,date:x.date,pay:'Transferência',status:x.type=='in'?'Recebido':'Pago',note:'Importado do extrato PDF'}));
-  save();closeM();toast(`✓ ${sel.length} lançamento(s) importado(s) com sucesso`);render()}
+  const old=S.tx.filter(t=>t.type=='out'&&!t.debt&&isMaree(t.orig||t.name)),newM=sel.filter(x=>x.mar&&x.type=='out');
+  const deb=(newM.length||old.length)?shopeeDebt(true):null;let sn=0,ss=0;
+  if(deb)old.forEach(t=>{payShopee(t,deb);sn++;ss+=t.val});
+  sel.forEach(x=>{const m=!!deb&&x.mar&&x.type=='out';
+    const t={id:uid(),type:x.type,name:x.name,party:'',cat:x.type=='in'?'Outros':(CO.includes(x.cat)?x.cat:'Outros'),val:x.val,date:x.date,pay:'Transferência',status:x.type=='in'?'Recebido':'Pago',note:'Importado do extrato PDF',orig:x.name,fp:fpOf(x.date,x.type,x.val,x.name)};
+    if(m){payShopee(t,deb);sn++;ss+=t.val}S.tx.push(t)});
+  save();closeM();
+  toast(`✓ ${sel.length} lançamento(s) importado(s)${SK?` · ${SK} duplicado(s) ignorado(s)`:''}`);
+  if(sn)setTimeout(()=>toast(`🛍️ Shopee: ${sn} parcela(s) (${brl(ss)}) registrada(s) em Dívidas${deb.total>0?'':' — defina o valor total lá'}`),400);
+  render()}
 $('#pdf').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;toast('Lendo o extrato…');
-  try{P=parseExtrato(await pdfLines(f));if(!P.length){toast('Não encontrei lançamentos nesse PDF. Ele pode ser escaneado (imagem) ou ter um formato não reconhecido.');return}previewExtrato()}
+  try{const all=parseExtrato(await pdfLines(f));if(!all.length){toast('Não encontrei lançamentos nesse PDF. Ele pode ser escaneado (imagem) ou ter um formato não reconhecido.');return}
+    SK=all.filter(x=>x.dup==2).length;P=all.filter(x=>x.dup!=2);
+    if(!P.length){toast(`Nenhum lançamento novo: os ${all.length} do PDF já estavam importados.`);return}previewExtrato()}
   catch(x){toast('Não foi possível ler o PDF. Verifique a conexão e se o arquivo não tem senha.')}};
 document.addEventListener('change',e=>{const i=e.target.dataset&&e.target.dataset.ty;if(i!==undefined&&P[i])P[i].type=e.target.value});
 
