@@ -185,6 +185,48 @@ input[aria-invalid=true],select[aria-invalid=true]{border-color:var(--r)!importa
  #bnav .fab:active{background:#1fae52}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* ===== Glass layer: blur on backgrounds and buttons ===== */
+:root{--glass:#14171acc;--glass2:#1c2024b3;--glass-ln:#ffffff14;--blur:blur(16px) saturate(140%)}
+body{background:var(--bg);position:relative}
+body::before{content:"";position:fixed;inset:-10%;z-index:-1;pointer-events:none;
+ background:radial-gradient(520px 420px at 82% 6%,#22C55E26,transparent 70%),
+  radial-gradient(480px 400px at 8% 78%,#22C55E14,transparent 70%),
+  radial-gradient(420px 360px at 95% 92%,#F0445214,transparent 70%),
+  radial-gradient(360px 300px at 40% 30%,#F5C54208,transparent 70%);filter:blur(30px)}
+.side{background:#0d0f11b3;-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);border-right-color:var(--glass-ln)}
+.card,.tw{background:linear-gradient(180deg,#ffffff0a,#ffffff03),var(--glass);border-color:var(--glass-ln);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
+.card:hover{border-color:#ffffff24}
+.lg{background:var(--glass);-webkit-backdrop-filter:blur(24px) saturate(140%);backdrop-filter:blur(24px) saturate(140%)}
+.mb{background:#14171af2;border-color:#ffffff1a;-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px)}
+#modal{background:#05060873;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+#bd{-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+.toast{background:var(--glass2);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
+.seg{background:#0000004d;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.tb input,.tb select,.mb input,.mb select,.lg input{background:#0000004d}
+/* buttons */
+.btn{background:#ffffff0a;border-color:var(--glass-ln);-webkit-backdrop-filter:blur(12px) saturate(140%);backdrop-filter:blur(12px) saturate(140%)}
+.btn:hover{background:#ffffff14;border-color:#ffffff29}
+.btn:active{background:#ffffff1c}
+.btn.pri{background:#22C55Ee6;border-color:#4ade8066;box-shadow:0 0 0 1px #ffffff1f inset,0 6px 18px -8px #22C55E99}
+.btn.pri:hover{background:#2fd56bf2;border-color:#4ade80aa}
+.btn.dng,.btn.del{background:#F044520f}
+.ib{-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.ib:hover{background:#ffffff14}
+#bnav{background:#0d0f11b3;-webkit-backdrop-filter:blur(20px) saturate(150%);backdrop-filter:blur(20px) saturate(150%);border-top-color:var(--glass-ln)}
+@media(max-width:700px){
+ #main tr{background:var(--glass);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);border-color:var(--glass-ln)}
+ #bnav .fab{background:#22C55Eee;-webkit-backdrop-filter:none;backdrop-filter:none}
+}
+/* fallback when blur is unsupported or the user asks for less transparency */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+ .side,#bnav,.mb{background:#111315}.card,.tw,.lg,.toast{background:var(--pn)}.btn{background:var(--pn2)}
+}
+@media(prefers-reduced-transparency:reduce){
+ body::before{display:none}
+ .side,#bnav,.mb,.card,.tw,.lg,.toast,.btn,.ib,.seg,#modal,#bd{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+ .side,#bnav,.mb{background:#111315}.card,.tw,.lg,.toast{background:var(--pn)}
+}
 </style>
 </head>
 <body>
