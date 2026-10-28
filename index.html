@@ -5196,75 +5196,103 @@
         });
     </script><script type="text/javascript" src="/++theme++padrao_govbr/govbrtheme-1b543ca.js"></script><div id="plone-analytics"></div><script id="google-login-js">
 (function(){
-  // >>> Coloque aqui o Client ID OAuth (Google Cloud Console > Credentials > Web application) <<<
-  var GOOGLE_CLIENT_ID='SEU_CLIENT_ID.apps.googleusercontent.com';
-  var KEY='usuarioGoogle';
+  // >>> Preencha com os dados do seu projeto Supabase (Project Settings > API) <<<
+  var SUPABASE_URL='https://mdfjvwjqtbmtxictksnw.supabase.co';
+  var SUPABASE_ANON_KEY='SUA_ANON_KEY';
+  // Client ID do Google: usado direto (Google Identity Services) enquanto o Supabase não estiver configurado
+  var GOOGLE_CLIENT_ID='157996991371-795v4mgi119aa5eda528mn8q7ekpemdm.apps.googleusercontent.com';
   var area=document.getElementById('google-login-area');
+  var client=null;
 
   // Esconde o botão "Entrar" do gov.br dentro da barra (shadow DOM), se existir
   function esconderEntrarGovbr(){
-    var b=document.getElementById('barra-govbr');
-    var root=b&&b.shadowRoot;
+    var b=document.getElementById('barra-govbr'),root=b&&b.shadowRoot;
     if(!root)return;
     root.querySelectorAll('button,a').forEach(function(el){
-      if(/^\s*entrar\b/i.test(el.textContent||'')||/gov\.br/i.test(el.getAttribute('aria-label')||'')&&/entrar/i.test(el.textContent||'')){el.style.display='none';}
+      if(/^\s*entrar\b/i.test(el.textContent||''))el.style.display='none';
     });
   }
   new MutationObserver(esconderEntrarGovbr).observe(document.documentElement,{childList:true,subtree:true});
   window.addEventListener('load',function(){setTimeout(esconderEntrarGovbr,500);});
 
-  function decodeJwt(t){
-    var b=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
-    return JSON.parse(decodeURIComponent(atob(b).split('').map(function(c){return '%'+('00'+c.charCodeAt(0).toString(16)).slice(-2);}).join('')));
-  }
-  function salvo(){try{return JSON.parse(localStorage.getItem(KEY));}catch(e){return null;}}
-  function guardar(u){try{localStorage.setItem(KEY,JSON.stringify(u));}catch(e){}}
-  function limpar(){try{localStorage.removeItem(KEY);}catch(e){}}
+  function configurado(){return SUPABASE_ANON_KEY!=='SUA_ANON_KEY';}
 
-  function renderLogado(u){
+  function renderLogado(user){
+    var m=user.user_metadata||{};
+    var nome=m.full_name||m.name||user.email||'Usuário';
     area.innerHTML='';
     var box=document.createElement('div');box.className='gl-user';
-    var img=document.createElement('img');img.alt='Foto de perfil de '+u.nome;img.referrerPolicy='no-referrer';img.src=u.foto||'';
-    img.onerror=function(){img.style.display='none';};
-    var n=document.createElement('span');n.textContent=u.nome;
-    box.appendChild(img);box.appendChild(n);
+    if(m.avatar_url||m.picture){
+      var img=document.createElement('img');img.alt='Foto de perfil de '+nome;img.referrerPolicy='no-referrer';
+      img.src=m.avatar_url||m.picture;img.onerror=function(){img.style.display='none';};box.appendChild(img);
+    }
+    var n=document.createElement('span');n.textContent=nome;box.appendChild(n);
     var s=document.createElement('button');s.type='button';s.className='gl-sair';s.textContent='Sair';
-    s.onclick=sair;
+    s.onclick=function(){client.auth.signOut();};
     area.appendChild(box);area.appendChild(s);
   }
   function renderDeslogado(){
     area.innerHTML='';
-    if(!window.google||!google.accounts||GOOGLE_CLIENT_ID.indexOf('SEU_CLIENT_ID')===0)return;
-    var slot=document.createElement('div');area.appendChild(slot);
-    google.accounts.id.renderButton(slot,{type:'standard',theme:'outline',size:'medium',text:'signin_with',shape:'pill',locale:'pt-BR'});
-  }
-  function aoReceberCredencial(resp){
-    try{
-      var p=decodeJwt(resp.credential);
-      var u={nome:p.name||p.email,email:p.email,foto:p.picture,sub:p.sub};
-      guardar(u);renderLogado(u);
-    }catch(e){console.error('Falha ao ler credencial Google',e);}
-  }
-  function sair(){
-    var u=salvo();limpar();
-    if(window.google&&google.accounts){google.accounts.id.disableAutoSelect();if(u&&u.email)google.accounts.id.revoke(u.email,function(){});}
-    renderDeslogado();
-    if(window.google&&google.accounts&&GOOGLE_CLIENT_ID.indexOf('SEU_CLIENT_ID')!==0)google.accounts.id.prompt();
+    var b=document.createElement('button');b.type='button';b.className='gl-sair';b.textContent='Entrar com Google';
+    b.onclick=function(){
+      client.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin+window.location.pathname}});
+    };
+    area.appendChild(b);
   }
 
   function iniciar(){
-    var u=salvo();
-    if(u){renderLogado(u);}
-    if(!window.google||!google.accounts){if(!u)area.innerHTML='';return;}
-    if(GOOGLE_CLIENT_ID.indexOf('SEU_CLIENT_ID')===0){console.warn('Login Google: defina GOOGLE_CLIENT_ID.');return;}
-    google.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID,callback:aoReceberCredencial,auto_select:true,cancel_on_tap_outside:false,use_fedcm_for_prompt:true});
-    if(!u){renderDeslogado();google.accounts.id.prompt();} // login automático (One Tap / auto-select)
+    if(!window.supabase||!configurado()){if(window.supabase)console.warn('Login Supabase: defina SUPABASE_URL e SUPABASE_ANON_KEY.');return;}
+    client=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+    // Login automático: restaura a sessão salva e trata o retorno do OAuth do Google
+    client.auth.getSession().then(function(r){
+      var s=r.data&&r.data.session;
+      if(s){renderLogado(s.user);}
+      else{
+        renderDeslogado();
+        // Se já veio do Google com ?auto=1, não repete; caso contrário, dispara o fluxo automático uma vez por sessão do navegador
+        try{
+          if(!sessionStorage.getItem('gl-auto')){sessionStorage.setItem('gl-auto','1');
+            client.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin+window.location.pathname}});}
+        }catch(e){}
+      }
+    });
+    client.auth.onAuthStateChange(function(ev,session){
+      if(session)renderLogado(session.user);
+      else renderDeslogado();
+    });
   }
+
+  // ---- Fallback: Google Identity Services direto (sem Supabase) ----
+  var KEY='usuarioGoogle';
+  function jwt(t){var b=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+    return JSON.parse(decodeURIComponent(atob(b).split('').map(function(c){return '%'+('00'+c.charCodeAt(0).toString(16)).slice(-2);}).join('')));}
+  function lerUsuario(){try{return JSON.parse(localStorage.getItem(KEY));}catch(e){return null;}}
+  function mostrar(u){renderLogado({email:u.email,user_metadata:{full_name:u.nome,avatar_url:u.foto}});
+    area.querySelector('.gl-sair').onclick=function(){
+      try{localStorage.removeItem(KEY);}catch(e){}
+      if(window.google&&google.accounts){google.accounts.id.disableAutoSelect();}
+      gisDeslogado();};}
+  function gisDeslogado(){
+    area.innerHTML='';var slot=document.createElement('div');area.appendChild(slot);
+    google.accounts.id.renderButton(slot,{type:'standard',theme:'outline',size:'medium',shape:'pill',locale:'pt-BR'});
+    google.accounts.id.prompt();}
+  function iniciarGIS(){
+    var u=lerUsuario();if(u)mostrar(u);
+    if(!window.google||!google.accounts)return;
+    google.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID,auto_select:true,cancel_on_tap_outside:false,use_fedcm_for_prompt:true,
+      callback:function(r){try{var p=jwt(r.credential);var n={nome:p.name||p.email,email:p.email,foto:p.picture};
+        localStorage.setItem(KEY,JSON.stringify(n));mostrar(n);}catch(e){console.error(e);}}});
+    if(!u)gisDeslogado();
+  }
+
   var s=document.createElement('script');
-  s.src='https://accounts.google.com/gsi/client';s.async=true;s.defer=true;
-  s.onload=iniciar;s.onerror=function(){var u=salvo();if(u)renderLogado(u);};
-  document.head.appendChild(s);
-  if(salvo())renderLogado(salvo());
+  if(configurado()){
+    s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js';s.onload=iniciar;
+  }else{
+    s.src='https://accounts.google.com/gsi/client';s.onload=iniciarGIS;
+    s.onerror=function(){var u=lerUsuario();if(u)mostrar(u);};
+  }
+  s.async=true;document.head.appendChild(s);
 })();
 </script>
 </body>
